@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 
 namespace MicroservicioReportes.Domain.Entities
@@ -20,7 +20,7 @@ namespace MicroservicioReportes.Domain.Entities
             };
         }
 
-        public static SagaResult Ok(object? data = null, string message = "Operación exitosa")
+        public static SagaResult Ok(object? data = null, string message = "Operaci�n exitosa")
         {
             return new SagaResult
             {

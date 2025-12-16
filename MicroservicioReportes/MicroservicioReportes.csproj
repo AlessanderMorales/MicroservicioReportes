@@ -11,7 +11,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\Domain\MicroservicioOrquestador.Domain.csproj" />
+    <ProjectReference Include="..\MicroservicioOrquestador.Domain\MicroservicioOrquestador.Domain.csproj" />
     <ProjectReference Include="..\MicroservicioOrquestador.Application\MicroservicioOrquestador.Application.csproj" />
     <ProjectReference Include="..\MicroservicioOrquestador.Infrastructure\MicroservicioOrquestador.Infrastructure.csproj" />
   </ItemGroup>
