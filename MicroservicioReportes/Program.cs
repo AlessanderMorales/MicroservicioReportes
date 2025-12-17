@@ -27,6 +27,8 @@ builder.Services.AddScoped<IUsuarioServiceExternal, UsuarioServiceExternal>();
 builder.Services.AddScoped<ITareaServiceExternal, TareaServiceExternal>();
 builder.Services.AddScoped<ReporteGeneratorService>();
 
+builder.Services.AddScoped<MicroservicioReportes.Application.Repository.ProcessedEventsRepository>();
+
 builder.Services.AddScoped<ICrearTareaSaga, CrearTareaSaga>();
 
 builder.Services.AddHostedService<MicroservicioReportes.Application.Messaging.ReporteConsumer>();

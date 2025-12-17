@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Text;
@@ -17,6 +17,7 @@ namespace MicroservicioReportes.Application.Messaging
 {
     public class TareaAsignadaEvent
     {
+        public string EventId { get; set; } = string.Empty;
         public int TareaId { get; set; }
         public List<int> EmpleadosIds { get; set; } = new();
         public string UsuarioNombre { get; set; } = string.Empty;
@@ -109,21 +110,45 @@ namespace MicroservicioReportes.Application.Messaging
                         return;
                     }
 
-                    _logger.LogInformation(
-                        "?? Evento recibido: TareaId={TareaId}, Titulo={Titulo}, Empleados={Count}, Usuario={Usuario}",
-                        evento.TareaId,
-                        evento.TareaTitulo,
-                        evento.EmpleadosIds.Count,
-                        evento.UsuarioNombre
-                    );
+                    using (var scope = _serviceProvider.CreateScope())
+                    {
+                        var processedEventsRepo = scope.ServiceProvider.GetRequiredService<MicroservicioReportes.Application.Repository.ProcessedEventsRepository>();
+                        
+                        if (!string.IsNullOrEmpty(evento.EventId) && processedEventsRepo.IsEventProcessed(evento.EventId))
+                        {
+                            _logger.LogInformation("✅ Evento {EventId} ya fue procesado. Ignorando duplicado.", evento.EventId);
+                            await _channel.BasicAckAsync(ea.DeliveryTag, false);
+                            return;
+                        }
 
-                    if (evento.EmpleadosIds.Count > 0)
-                    {
-                        await GenerarReportesAsync(evento);
-                    }
-                    else
-                    {
-                        _logger.LogInformation("No se generan reportes: sin empleados asignados");
+                        _logger.LogInformation(
+                            "📥 Evento recibido: EventId={EventId}, TareaId={TareaId}, Titulo={Titulo}, Empleados={Count}, Usuario={Usuario}",
+                            evento.EventId,
+                            evento.TareaId,
+                            evento.TareaTitulo,
+                            evento.EmpleadosIds.Count,
+                            evento.UsuarioNombre
+                        );
+
+                        if (evento.EmpleadosIds.Count > 0)
+                        {
+                            await GenerarReportesAsync(evento);
+                            
+                            if (!string.IsNullOrEmpty(evento.EventId))
+                            {
+                                processedEventsRepo.MarkAsProcessed(evento.EventId, "TareaAsignadaEvent");
+                                _logger.LogInformation("✅ Evento {EventId} marcado como procesado", evento.EventId);
+                            }
+                        }
+                        else
+                        {
+                            _logger.LogInformation("No se generan reportes: sin empleados asignados");
+                            
+                            if (!string.IsNullOrEmpty(evento.EventId))
+                            {
+                                processedEventsRepo.MarkAsProcessed(evento.EventId, "TareaAsignadaEvent");
+                            }
+                        }
                     }
 
                     await _channel.BasicAckAsync(ea.DeliveryTag, false);
@@ -166,7 +191,7 @@ namespace MicroservicioReportes.Application.Messaging
                 {
                     var reporteService = scope.ServiceProvider.GetRequiredService<ReporteGeneratorService>();
 
-                    _logger.LogInformation("?? Generando reportes autom�ticos (PDF y Excel) para tarea {TareaId}", evento.TareaId);
+                    _logger.LogInformation("Generando reportes automáticos (PDF y Excel) para tarea {TareaId}", evento.TareaId);
 
                     var (pdfBytes, excelBytes) = await reporteService.GenerarReportesTareaAsync(
                         evento.TareaId,
@@ -191,18 +216,18 @@ namespace MicroservicioReportes.Application.Messaging
                     var nombreArchivoPdf = $"Tarea_{evento.TareaId}_{timestamp}.pdf";
                     var rutaCompletaPdf = Path.Combine(rutaReportes, nombreArchivoPdf);
                     await File.WriteAllBytesAsync(rutaCompletaPdf, pdfBytes);
-                    _logger.LogInformation("? Reporte PDF guardado en: {Ruta}", rutaCompletaPdf);
+                    _logger.LogInformation("Reporte PDF guardado en: {Ruta}", rutaCompletaPdf);
 
                     var nombreArchivoExcel = $"Tarea_{evento.TareaId}_{timestamp}.xlsx";
                     var rutaCompletaExcel = Path.Combine(rutaReportes, nombreArchivoExcel);
                     await File.WriteAllBytesAsync(rutaCompletaExcel, excelBytes);
-                    _logger.LogInformation("? Reporte Excel guardado en: {Ruta}", rutaCompletaExcel);
+                    _logger.LogInformation("Reporte Excel guardado en: {Ruta}", rutaCompletaExcel);
 
-                    _logger.LogInformation("?? Reportes generados exitosamente para tarea {TareaId}", evento.TareaId);
+                    _logger.LogInformation("Reportes generados exitosamente para tarea {TareaId}", evento.TareaId);
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogError(ex, "? Error al generar reportes para tarea {TareaId}", evento.TareaId);
+                    _logger.LogError(ex, "Error al generar reportes para tarea {TareaId}", evento.TareaId);
                     throw;
                 }
             }
