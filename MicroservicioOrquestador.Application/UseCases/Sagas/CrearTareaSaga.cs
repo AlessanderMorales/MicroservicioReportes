@@ -32,9 +32,8 @@ namespace MicroservicioReportes.Application.UseCases.Sagas
 
             try
             {
-                _logger.LogInformation("?? [Saga] Iniciando proceso...");
+                _logger.LogInformation("[Saga] Iniciando proceso...");
 
-                // 1. Validar
                 foreach (var empId in request.EmpleadosIds)
                 {
                     var disponible = await _usuarioService.VerificarDisponibilidad(empId);
@@ -42,7 +41,6 @@ namespace MicroservicioReportes.Application.UseCases.Sagas
                         throw new Exception($"El empleado {empId} no está disponible.");
                 }
 
-                // 2. Crear Tarea
                 var nuevaTareaDto = new CrearTareaExternalDto
                 {
                     titulo = request.Titulo,
@@ -58,26 +56,22 @@ namespace MicroservicioReportes.Application.UseCases.Sagas
 
                 tareaCreadaId = tareaCreada.Id;
 
-                // Rollback Tarea
                 compensaciones.Push(async () => {
-                    _logger.LogWarning($"?? [Rollback] Eliminando tarea {tareaCreadaId}");
+                    _logger.LogWarning($"[Rollback] Eliminando tarea {tareaCreadaId}");
                     await _tareaService.EliminarTarea(tareaCreadaId.Value);
                 });
 
-                // 3. Asignar
                 var asignacionOk = await _tareaService.AsignarEmpleados(tareaCreadaId.Value, request.EmpleadosIds);
                 if (!asignacionOk) throw new Exception("Error al asignar empleados a la tarea.");
 
-                // 4. Marcar Ocupados
                 foreach (var empId in request.EmpleadosIds)
                 {
                     var ocupadoOk = await _usuarioService.MarcarOcupado(empId);
                     if (ocupadoOk)
                     {
                         empleadosAsignados.Add(empId);
-                        // Rollback Empleado
                         compensaciones.Push(async () => {
-                            _logger.LogWarning($"?? [Rollback] Liberando empleado {empId}");
+                            _logger.LogWarning($"[Rollback] Liberando empleado {empId}");
                             await _usuarioService.MarcarDisponible(empId);
                         });
                     }
@@ -91,7 +85,7 @@ namespace MicroservicioReportes.Application.UseCases.Sagas
             }
             catch (Exception ex)
             {
-                _logger.LogError($"? [Saga Falló] {ex.Message}");
+                _logger.LogError($"[Saga Falló] {ex.Message}");
                 while (compensaciones.Count > 0)
                 {
                     try { await compensaciones.Pop()(); }
