@@ -7,5 +7,6 @@ namespace MicroservicioReportes.Application.Interfaces
         Task<bool> VerificarDisponibilidad(int empleadoId);
         Task<bool> MarcarOcupado(int empleadoId);
         Task<bool> MarcarDisponible(int empleadoId);
+        Task<dynamic> ObtenerUsuarioPorId(int usuarioId);
     }
 }

@@ -4,6 +4,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using MicroservicioReportes.Application.Interfaces;
 using MicroservicioReportes.Application.UseCases.Sagas;
+using MicroservicioReportes.Application.Services;
 using MicroservicioReportes.Infrastructure.Services;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -24,6 +25,7 @@ builder.Services.AddHttpClient("TareaClient", client =>
 
 builder.Services.AddScoped<IUsuarioServiceExternal, UsuarioServiceExternal>();
 builder.Services.AddScoped<ITareaServiceExternal, TareaServiceExternal>();
+builder.Services.AddScoped<ReporteGeneratorService>();
 
 builder.Services.AddScoped<ICrearTareaSaga, CrearTareaSaga>();
 

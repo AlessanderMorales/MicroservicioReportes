@@ -1,14 +1,17 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Text;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using RabbitMQ.Client;
 using RabbitMQ.Client.Events;
+using MicroservicioReportes.Application.Services;
 
 namespace MicroservicioReportes.Application.Messaging
 {
@@ -27,12 +30,17 @@ namespace MicroservicioReportes.Application.Messaging
         private readonly IChannel _channel;
         private readonly ILogger<ReporteConsumer> _logger;
         private readonly string _queueName;
+        private readonly IServiceProvider _serviceProvider;
+        private readonly IConfiguration _configuration;
 
         public ReporteConsumer(
             IConfiguration configuration,
-            ILogger<ReporteConsumer> logger)
+            ILogger<ReporteConsumer> logger,
+            IServiceProvider serviceProvider)
         {
             _logger = logger;
+            _serviceProvider = serviceProvider;
+            _configuration = configuration;
 
             try
             {
@@ -102,18 +110,21 @@ namespace MicroservicioReportes.Application.Messaging
                     }
 
                     _logger.LogInformation(
-                        "Evento recibido: TareaId={TareaId}, Titulo={Titulo}, Empleados={Count}, Usuario={Usuario}",
+                        "?? Evento recibido: TareaId={TareaId}, Titulo={Titulo}, Empleados={Count}, Usuario={Usuario}",
                         evento.TareaId,
                         evento.TareaTitulo,
                         evento.EmpleadosIds.Count,
                         evento.UsuarioNombre
                     );
 
-                    _logger.LogInformation(
-                        "Evento procesado: Reporte para tarea {TareaId} con {Count} empleados",
-                        evento.TareaId,
-                        evento.EmpleadosIds.Count
-                    );
+                    if (evento.EmpleadosIds.Count > 0)
+                    {
+                        await GenerarReportesAsync(evento);
+                    }
+                    else
+                    {
+                        _logger.LogInformation("No se generan reportes: sin empleados asignados");
+                    }
 
                     await _channel.BasicAckAsync(ea.DeliveryTag, false);
                 }
@@ -147,6 +158,56 @@ namespace MicroservicioReportes.Application.Messaging
             }
         }
 
+        private async Task GenerarReportesAsync(TareaAsignadaEvent evento)
+        {
+            using (var scope = _serviceProvider.CreateScope())
+            {
+                try
+                {
+                    var reporteService = scope.ServiceProvider.GetRequiredService<ReporteGeneratorService>();
+
+                    _logger.LogInformation("?? Generando reportes automáticos (PDF y Excel) para tarea {TareaId}", evento.TareaId);
+
+                    var (pdfBytes, excelBytes) = await reporteService.GenerarReportesTareaAsync(
+                        evento.TareaId,
+                        evento.TareaTitulo,
+                        evento.EmpleadosIds,
+                        evento.UsuarioNombre
+                    );
+
+                    var rutaBase = _configuration["Reportes:RutaBase"] ?? Directory.GetCurrentDirectory();
+                    var directorioRaiz = Directory.GetParent(rutaBase)?.Parent?.Parent?.FullName;
+
+                    if (string.IsNullOrEmpty(directorioRaiz))
+                    {
+                        directorioRaiz = rutaBase;
+                    }
+
+                    var rutaReportes = Path.Combine(directorioRaiz, "reportes");
+                    Directory.CreateDirectory(rutaReportes);
+
+                    var timestamp = DateTime.Now.ToString("yyyyMMdd_HHmmss");
+
+                    var nombreArchivoPdf = $"Tarea_{evento.TareaId}_{timestamp}.pdf";
+                    var rutaCompletaPdf = Path.Combine(rutaReportes, nombreArchivoPdf);
+                    await File.WriteAllBytesAsync(rutaCompletaPdf, pdfBytes);
+                    _logger.LogInformation("? Reporte PDF guardado en: {Ruta}", rutaCompletaPdf);
+
+                    var nombreArchivoExcel = $"Tarea_{evento.TareaId}_{timestamp}.xlsx";
+                    var rutaCompletaExcel = Path.Combine(rutaReportes, nombreArchivoExcel);
+                    await File.WriteAllBytesAsync(rutaCompletaExcel, excelBytes);
+                    _logger.LogInformation("? Reporte Excel guardado en: {Ruta}", rutaCompletaExcel);
+
+                    _logger.LogInformation("?? Reportes generados exitosamente para tarea {TareaId}", evento.TareaId);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "? Error al generar reportes para tarea {TareaId}", evento.TareaId);
+                    throw;
+                }
+            }
+        }
+
         public override void Dispose()
         {
             try
@@ -164,3 +225,4 @@ namespace MicroservicioReportes.Application.Messaging
         }
     }
 }
+

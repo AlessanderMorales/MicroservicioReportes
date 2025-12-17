@@ -53,5 +53,22 @@ namespace MicroservicioReportes.Infrastructure.Services
             }
             catch { return false; }
         }
+
+        public async Task<dynamic> ObtenerUsuarioPorId(int usuarioId)
+        {
+            try
+            {
+                var response = await _httpClient.GetAsync($"api/usuario/{usuarioId}");
+                if (!response.IsSuccessStatusCode) return null;
+
+                var content = await response.Content.ReadAsStringAsync();
+                var usuario = JsonSerializer.Deserialize<dynamic>(content);
+                return usuario;
+            }
+            catch
+            {
+                return null;
+            }
+        }
     }
 }
